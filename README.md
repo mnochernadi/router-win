@@ -30,8 +30,48 @@ spot, and it is rebuilt on a timer anyway.
 |---|---|
 | Run | prompt box, streamed output, live attempt log |
 | Pool | every exit with transport and park/unpark |
+| Update subs | re-download the subscriptions without touching the pool |
+| Test exits | probe candidates, stop at the pool target, install them as the pool |
 | Settings | model, pool target, pool TTL, subscription URLs |
 | Log | rolling lane log |
+
+## API
+
+OpenAI-compatible, for pointing a harness at it. Base `http://127.0.0.1:8790`.
+
+```
+GET  /v1/models                 every free model, OpenAI list shape
+POST /v1/chat/completions       { model, messages, stream? }
+```
+
+`/v1/chat/completions` runs the lane with rotation and answers in the OpenAI shape.
+`stream: true` returns SSE chunks and `[DONE]`. The chosen exit and attempt count come
+back in `x-router-exit` and `x-router-attempts`. The model accepts either the bare id
+(`deepseek-v4.1-flash-free`) or the prefixed form (`opencode/deepseek-v4.1-flash-free`);
+an id outside the catalog is `404`.
+
+```bash
+curl -s http://127.0.0.1:8790/v1/models | jq -r '.data[].id'
+
+curl -s http://127.0.0.1:8790/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{"model":"deepseek-v4.1-flash-free","messages":[{"role":"user","content":"say OK"}]}'
+```
+
+One run at a time: a second concurrent request gets `429 rate_limit_error`.
+
+Dashboard actions, for scripting:
+
+```
+POST /api/run       { prompt }      run through the dashboard stream
+POST /api/subs                      re-download subscriptions
+POST /api/test                      probe and install up to poolTarget exits
+POST /api/refresh                   full rebuild
+POST /api/park      { tag, parked } park or unpark one exit
+GET  /api/state                     pool, settings, status
+GET  /api/log                       rolling log tail
+```
+
 
 ## Isolation
 

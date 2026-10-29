@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 // Dashboard server. Zero dependencies: node:http only.
 
 const fs = require('node:fs');
@@ -7,6 +7,7 @@ const path = require('node:path');
 const C = require('./lib/config');
 const pool = require('./lib/pool');
 const lane = require('./lib/lane');
+const models = require('./lib/models');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -88,6 +89,124 @@ async function handle(req, res) {
   }
 
   if (p === '/api/state') return json(res, 200, state());
+
+  // ---- OpenAI-compatible surface -------------------------------------------
+  if (p === '/v1/models' && req.method === 'GET') {
+    try {
+      const data = await models.list();
+      return json(res, 200, { object: 'list', data });
+    } catch (e) {
+      return json(res, 502, { error: { message: e.message, type: 'catalog_error' } });
+    }
+  }
+
+  if ((p === '/v1/chat/completions' || p === '/chat/completions') && req.method === 'POST') {
+    const reqBody = await body(req);
+    const msgs = Array.isArray(reqBody.messages) ? reqBody.messages : [];
+    const prompt = msgs.filter((m) => m.role === 'user').map((m) => m.content).pop();
+    if (!prompt) {
+      return json(res, 400, { error: { message: 'messages with a user turn required', type: 'invalid_request_error' } });
+    }
+    if (running) {
+      return json(res, 429, { error: { message: 'a run is already in progress', type: 'rate_limit_error' } });
+    }
+
+    const s = C.settings();
+    let ids = [];
+    try { ids = await models.load(); } catch { /* catalog optional */ }
+    const wanted = reqBody.model ? models.known(ids, reqBody.model) : null;
+    if (reqBody.model && ids.length && !wanted) {
+      return json(res, 404, { error: { message: `unknown model: ${reqBody.model}`, type: 'invalid_request_error' } });
+    }
+    const settings = wanted ? { ...s, model: `opencode/${wanted}` } : s;
+
+    const id = `chatcmpl-${Date.now().toString(36)}`;
+    const created = Math.floor(Date.now() / 1000);
+    const modelName = wanted || settings.model.replace(/^[^/]+\//, '');
+    const stream = Boolean(reqBody.stream);
+
+    running = true;
+    broadcast({ type: 'state' });
+    log(`api run: ${modelName} :: ${String(prompt).slice(0, 100)}`);
+
+    if (stream) {
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      });
+      const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      const chunk = (delta, finish = null) => send({
+        id, object: 'chat.completion.chunk', created, model: modelName,
+        choices: [{ index: 0, delta, finish_reason: finish }],
+      });
+      chunk({ role: 'assistant', content: '' });
+      try {
+        const r = await lane.run(prompt, settings, (ev) => {
+          if (ev.type === 'data') {
+            const t = lane.clean(ev.text).replace(/^[ \t]*>?[ \t]*build.*$/gm, '');
+            if (t.trim()) chunk({ content: t });
+          }
+          else if (ev.type === 'log') log(ev.message);
+        });
+        chunk({}, 'stop');
+        res.write('data: [DONE]\n\n');
+        log(r.ok ? `api done via ${r.exit}` : `api failed: ${r.text}`);
+      } catch (e) {
+        chunk({ content: `\n[error] ${e.message}` }, 'stop');
+        res.write('data: [DONE]\n\n');
+      } finally {
+        running = false;
+        broadcast({ type: 'state' });
+        res.end();
+      }
+      return;
+    }
+
+    try {
+      const r = await lane.run(prompt, settings, (ev) => { if (ev.type === 'log') log(ev.message); });
+      lastRun = { ok: r.ok, text: r.text, exit: r.exit, attempts: r.attempts, at: Date.now() };
+      broadcast({ type: 'done', ...lastRun });
+      if (!r.ok) {
+        return json(res, 502, { error: { message: r.text, type: 'upstream_error', exit: r.exit } });
+      }
+      return json(res, 200, {
+        id, object: 'chat.completion', created, model: modelName,
+        choices: [{ index: 0, message: { role: 'assistant', content: r.text }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        'x-router-exit': r.exit,
+        'x-router-attempts': r.attempts,
+      });
+    } catch (e) {
+      return json(res, 502, { error: { message: e.message, type: 'upstream_error' } });
+    } finally {
+      running = false;
+      broadcast({ type: 'state' });
+    }
+  }
+
+  // ---- dashboard actions ---------------------------------------------------
+  if (p === '/api/subs' && req.method === 'POST') {
+    if (running) return json(res, 409, { error: 'a run is in progress' });
+    log('updating subscriptions');
+    pool.fetchSubs(C.settings().subs)
+      .then((links) => { log(`subscriptions updated: ${links.length} links`); broadcast({ type: 'state' }); })
+      .catch((e) => log(`subscription update failed: ${e.message}`));
+    return json(res, 202, { started: true });
+  }
+
+  if (p === '/api/test' && req.method === 'POST') {
+    if (running) return json(res, 409, { error: 'a run is in progress' });
+    const s = C.settings();
+    log(`testing exits, target ${s.poolTarget}`);
+    pool.refresh(s, log)
+      .then((exits) => {
+        log(`test done: ${exits.length} working exits in the pool`);
+        broadcast({ type: 'state' });
+      })
+      .catch((e) => log(`test failed: ${e.message}`));
+    return json(res, 202, { started: true });
+  }
 
   if (p === '/api/refresh' && req.method === 'POST') {
     if (running) return json(res, 409, { error: 'a run is in progress' });

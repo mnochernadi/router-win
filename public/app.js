@@ -28,6 +28,8 @@ function render(s) {
 
   $('run').disabled = s.running;
   $('refresh').disabled = s.running;
+  $('subs').disabled = s.running;
+  $('test').disabled = s.running;
 
   const tbody = $('pool');
   tbody.textContent = '';
@@ -78,8 +80,20 @@ $('run').onclick = async () => {
 
 $('refresh').onclick = async () => {
   out.textContent = '';
-  append(out, 'refreshing pool from the subscriptions...\n', 'warn');
+  append(out, 'rebuilding pool from the subscriptions...\n', 'warn');
   try { await api('/api/refresh', { method: 'POST' }); } catch (e) { append(out, `${e.message}\n`, 'bad'); }
+};
+
+$('subs').onclick = async () => {
+  out.textContent = '';
+  append(out, 'downloading fresh subscriptions...\n', 'warn');
+  try { await api('/api/subs', { method: 'POST' }); } catch (e) { append(out, `${e.message}\n`, 'bad'); }
+};
+
+$('test').onclick = async () => {
+  out.textContent = '';
+  append(out, 'testing exits until the pool target is reached...\n', 'warn');
+  try { await api('/api/test', { method: 'POST' }); } catch (e) { append(out, `${e.message}\n`, 'bad'); }
 };
 
 $('save').onclick = async () => {
