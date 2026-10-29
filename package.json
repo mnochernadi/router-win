@@ -1,0 +1,15 @@
+{
+  "name": "router-win",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Anonymous OpenCode lane for Windows with a dashboard: isolated profile, rotating v2ray exits, no system proxy",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node lib/setup.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
