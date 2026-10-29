@@ -261,6 +261,7 @@ async function handle(req, res) {
   if (p === '/api/settings' && req.method === 'POST') {
     const patch = await body(req);
     if (typeof patch.subs === 'string') patch.subs = patch.subs.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    if (Array.isArray(patch.subs) && !patch.subs.length) delete patch.subs; // never wipe the list
     for (const k of ['poolTarget', 'poolTtlHours', 'proxyPort']) {
       if (patch[k] !== undefined) patch[k] = Number(patch[k]);
     }

@@ -28,7 +28,7 @@ function render(s) {
 
   $('run').disabled = s.running;
   $('refresh').disabled = s.running;
-  $('subs').disabled = s.running;
+  $('subsBtn').disabled = s.running;
   $('test').disabled = s.running;
 
   const tbody = $('pool');
@@ -86,7 +86,7 @@ $('refresh').onclick = async () => {
   try { await api('/api/refresh', { method: 'POST' }); } catch (e) { append(out, `${e.message}\n`, 'bad'); }
 };
 
-$('subs').onclick = async () => {
+$('subsBtn').onclick = async () => {
   out.textContent = '';
   append(out, 'downloading fresh subscriptions...\n', 'warn');
   try { await api('/api/subs', { method: 'POST' }); } catch (e) { append(out, `${e.message}\n`, 'bad'); }
