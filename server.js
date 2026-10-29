@@ -69,6 +69,7 @@ function state() {
     endpoint: `http://127.0.0.1:` + s.port + '/v1',
     apiKey: s.apiKey,
     settings: {
+      cwd: s.cwd || '',
       model: s.model, poolTarget: s.poolTarget, poolTtlHours: s.poolTtlHours,
       proxyPort: s.proxyPort, subs: s.subs, cliPath: s.cliPath,
     },
@@ -115,6 +116,7 @@ async function handle(req, res) {
     const reqBody = await body(req);
     const msgs = Array.isArray(reqBody.messages) ? reqBody.messages : [];
     const prompt = msgs.filter((m) => m.role === 'user').map((m) => m.content).pop();
+    const cwd = reqBody.cwd || req.headers['x-router-cwd'] || undefined;
     if (!prompt) {
       return json(res, 400, { error: { message: 'messages with a user turn required', type: 'invalid_request_error' } });
     }
@@ -162,7 +164,7 @@ async function handle(req, res) {
             if (t.trim()) chunk({ content: t });
           }
           else if (ev.type === 'log') log(ev.message);
-        });
+        }, cwd);
         if (!r.ok && r.reason === 'model') {
           badModels.add(r.model);
           chunk({ content: `[model unavailable] ` + r.model }, 'stop');
@@ -183,7 +185,7 @@ async function handle(req, res) {
     }
 
     try {
-      const r = await lane.run(prompt, settings, (ev) => { if (ev.type === 'log') log(ev.message); });
+      const r = await lane.run(prompt, settings, (ev) => { if (ev.type === 'log') log(ev.message); }, cwd);
       lastRun = { ok: r.ok, text: r.text, exit: r.exit, attempts: r.attempts, at: Date.now() };
       broadcast({ type: 'done', ...lastRun });
       if (!r.ok) {
@@ -241,7 +243,7 @@ async function handle(req, res) {
 
   if (p === '/api/run' && req.method === 'POST') {
     if (running) return json(res, 409, { error: 'already running' });
-    const { prompt } = await body(req);
+    const { prompt, cwd } = await body(req);
     if (!prompt || !prompt.trim()) return json(res, 400, { error: 'prompt required' });
     running = true;
     broadcast({ type: 'state' });
@@ -249,7 +251,7 @@ async function handle(req, res) {
     lane.run(prompt, C.settings(), (ev) => {
       if (ev.type === 'log') log(ev.message);
       else broadcast(ev);
-    })
+    }, cwd)
       .then((r) => {
         lastRun = { ok: r.ok, text: r.text, exit: r.exit, attempts: r.attempts, at: Date.now() };
         broadcast({ type: 'done', ...lastRun });

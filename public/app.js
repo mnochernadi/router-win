@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const $ = (id) => document.getElementById(id);
 const out = $('out');
@@ -52,6 +52,7 @@ function render(s) {
   $('endpoint').value = s.endpoint;
   $('apikey').value = s.apiKey;
   const st = s.settings;
+  if (document.activeElement !== $('cwd')) $('cwd').value = st.cwd || '';
   if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
     $('model').value = st.model;
     $('poolTarget').value = st.poolTarget;
@@ -73,7 +74,7 @@ $('run').onclick = async () => {
     await api('/api/run', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, cwd: $('cwd').value.trim() || undefined }),
     });
   } catch (e) {
     append(out, `\n${e.message}\n`, 'bad');
@@ -108,6 +109,7 @@ $('save').onclick = async () => {
         poolTarget: $('poolTarget').value,
         poolTtlHours: $('poolTtlHours').value,
         subs: $('subs').value,
+        cwd: $('cwd').value.trim(),
       }),
     });
     append(out, 'settings saved\n', 'ok');

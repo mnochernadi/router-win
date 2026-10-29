@@ -69,6 +69,10 @@ curl -s -H "authorization: Bearer $KEY" http://127.0.0.1:8790/v1/chat/completion
   -d '{"model":"deepseek-v4.1-flash-free","messages":[{"role":"user","content":"say OK"}]}'
 ```
 
+### Working directory
+
+The lane runs in the caller's project, not in its own scratch dir. Pass `cwd` in the body (or an `x-router-cwd` header); an invalid path falls back to `runtime/proj`. The dashboard has a working directory field, persisted in settings.
+
 ### In a harness
 
 Any tool that speaks the OpenAI API works: set the base URL to
