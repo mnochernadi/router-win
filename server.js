@@ -65,6 +65,8 @@ function state() {
     anonymous: !lane.hasCredential(),
     running,
     lastRun,
+    endpoint: `http://127.0.0.1:` + s.port + '/v1',
+    apiKey: s.apiKey,
     settings: {
       model: s.model, poolTarget: s.poolTarget, poolTtlHours: s.poolTtlHours,
       proxyPort: s.proxyPort, subs: s.subs, cliPath: s.cliPath,
@@ -90,6 +92,14 @@ async function handle(req, res) {
 
   if (p === '/api/state') return json(res, 200, state());
 
+  // Bearer check for the API surface. The dashboard itself stays open on loopback.
+  if (p.startsWith('/v1/') || p === '/chat/completions') {
+    const key = C.settings().apiKey;
+    const sent = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+    if (key && sent !== key) {
+      return json(res, 401, { error: { message: 'invalid api key', type: 'invalid_request_error' } });
+    }
+  }
   // ---- OpenAI-compatible surface -------------------------------------------
   if (p === '/v1/models' && req.method === 'GET') {
     try {

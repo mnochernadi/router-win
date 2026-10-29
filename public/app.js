@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const $ = (id) => document.getElementById(id);
 const out = $('out');
@@ -23,7 +23,7 @@ function render(s) {
   $('anon').className = 'badge ' + (s.anonymous ? 'ok' : 'warn');
 
   const age = Number.isFinite(s.ageHours) ? s.ageHours.toFixed(1) : '-';
-  $('poolinfo').textContent = `${s.pool.length} exits · ${age} h`;
+  $('poolinfo').textContent = `${s.pool.length} exits Â· ${age} h`;
   $('poolinfo').className = 'badge ' + (s.pool.length ? 'ok' : 'warn');
 
   $('run').disabled = s.running;
@@ -49,6 +49,8 @@ function render(s) {
     tbody.appendChild(tr);
   }
 
+  $('endpoint').value = s.endpoint;
+  $('apikey').value = s.apiKey;
   const st = s.settings;
   if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
     $('model').value = st.model;
@@ -111,6 +113,10 @@ $('save').onclick = async () => {
     append(out, 'settings saved\n', 'ok');
   } catch (e) { append(out, `${e.message}\n`, 'bad'); }
 };
+
+const copy = (id) => navigator.clipboard.writeText($(id).value).then(() => append(out, 'copied\n', 'ok'));
+$('copyEndpoint').onclick = () => copy('endpoint');
+$('copyKey').onclick = () => copy('apikey');
 
 $('prompt').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('run').click();

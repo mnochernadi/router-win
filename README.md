@@ -37,12 +37,21 @@ spot, and it is rebuilt on a timer anyway.
 
 ## API
 
-OpenAI-compatible, for pointing a harness at it. Base `http://127.0.0.1:8790`.
+OpenAI-compatible, for pointing a harness at it.
+
+```
+base url   http://127.0.0.1:8790/v1
+api key    runtime/settings.json -> apiKey   (also shown on the dashboard, with a copy button)
+```
 
 ```
 GET  /v1/models                 every free model, OpenAI list shape
 POST /v1/chat/completions       { model, messages, stream? }
 ```
+
+Every `/v1/*` call needs `Authorization: Bearer <apiKey>`; without it the answer is
+`401`. The key is generated on first start and can be replaced by editing `apiKey` in
+`runtime/settings.json`.
 
 `/v1/chat/completions` runs the lane with rotation and answers in the OpenAI shape.
 `stream: true` returns SSE chunks and `[DONE]`. The chosen exit and attempt count come
@@ -51,12 +60,28 @@ back in `x-router-exit` and `x-router-attempts`. The model accepts either the ba
 an id outside the catalog is `404`.
 
 ```bash
-curl -s http://127.0.0.1:8790/v1/models | jq -r '.data[].id'
+KEY=$(node -p "require('./runtime/settings.json').apiKey")
 
-curl -s http://127.0.0.1:8790/v1/chat/completions \
+curl -s -H "authorization: Bearer $KEY" http://127.0.0.1:8790/v1/models | jq -r '.data[].id'
+
+curl -s -H "authorization: Bearer $KEY" http://127.0.0.1:8790/v1/chat/completions \
   -H 'content-type: application/json' \
   -d '{"model":"deepseek-v4.1-flash-free","messages":[{"role":"user","content":"say OK"}]}'
 ```
+
+### In a harness
+
+Any tool that speaks the OpenAI API works: set the base URL to
+`http://127.0.0.1:8790/v1`, paste the key, pick a model from `/v1/models`.
+
+```bash
+# openai SDK / most CLIs
+export OPENAI_BASE_URL=http://127.0.0.1:8790/v1
+export OPENAI_API_KEY=$(node -p "require('./runtime/settings.json').apiKey")
+```
+
+The server binds `127.0.0.1` only. To reach it from another machine, change the
+`listen` call in `server.js` to `0.0.0.0` and keep the key.
 
 One run at a time: a second concurrent request gets `429 rate_limit_error`.
 

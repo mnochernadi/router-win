@@ -41,6 +41,19 @@
 
   <div>
     <section>
+      <h2>Connect</h2>
+      <label>base url</label>
+      <input type="text" id="endpoint" readonly>
+      <label>api key</label>
+      <input type="text" id="apikey" readonly>
+      <div class="row">
+        <button id="copyEndpoint">Copy url</button>
+        <button id="copyKey">Copy key</button>
+      </div>
+      <div class="hint">OpenAI-compatible. Any harness: base url above, key above, model from <code>/v1/models</code>.</div>
+    </section>
+
+    <section>
       <h2>Settings</h2>
       <label>model</label>
       <input type="text" id="model">
