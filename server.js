@@ -50,6 +50,30 @@ function body(req) {
   });
 }
 
+// A harness states its workspace in the system prompt, not in a header. Pull the
+// directory out of there so the caller never has to configure it by hand.
+const CWD_PATTERNS = [
+  /current working directory\s*[:=]\s*([A-Za-z]:\\[^\s"'<>|]+|\/[^\s"'<>|]+)/i,
+  /(?:working directory|workspace(?: root)?|project root|cwd|directory)\s*[:=]\s*([A-Za-z]:\\[^\s"'<>|]+|\/[^\s"'<>|]+)/i,
+  /<cwd>\s*([^<]+?)\s*<\/cwd>/i,
+];
+
+function detectCwd(messages) {
+  const sys = messages
+    .filter((m) => m.role === 'system' || m.role === 'developer')
+    .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')))
+    .join('\n');
+  if (!sys) return undefined;
+  for (const re of CWD_PATTERNS) {
+    const m = sys.match(re);
+    if (!m) continue;
+    const raw = m[1].trim().replace(/[.,;:]+$/, '');
+    try {
+      if (fs.statSync(raw).isDirectory()) return raw;
+    } catch { /* try next */ }
+  }
+  return undefined;
+}
 function state() {
   const s = C.settings();
   const bad = pool.readBad();
@@ -127,7 +151,7 @@ async function handle(req, res) {
       return c == null ? '' : String(c);
     };
     const prompt = msgs.filter((m) => m.role === 'user').map(textOf).filter((t) => t.trim()).pop();
-    const cwd = reqBody.cwd || req.headers['x-router-cwd'] || undefined;
+    const cwd = reqBody.cwd || req.headers['x-router-cwd'] || detectCwd(msgs) || undefined;
     if (!prompt) {
       return json(res, 400, { error: { message: 'messages with a user turn required', type: 'invalid_request_error' } });
     }
@@ -154,7 +178,7 @@ async function handle(req, res) {
 
     running = true;
     broadcast({ type: 'state' });
-    log(`api run: ${modelName} :: ${String(prompt).slice(0, 100)}`);
+    log(`api run: ${modelName} in ${cwd || '(default)'} :: ${String(prompt).slice(0, 80)}`);
 
     if (stream) {
       res.writeHead(200, {
@@ -254,7 +278,8 @@ async function handle(req, res) {
 
   if (p === '/api/run' && req.method === 'POST') {
     if (running) return json(res, 409, { error: 'already running' });
-    const { prompt: rawPrompt, cwd } = await body(req);
+    const { prompt: rawPrompt, cwd: dashCwd, messages: dashMsgs } = await body(req);
+    const cwd = dashCwd || detectCwd(Array.isArray(dashMsgs) ? dashMsgs : []);
     const prompt = Array.isArray(rawPrompt) ? rawPrompt.map((p) => (typeof p === 'string' ? p : p && p.text || '')).join('') : rawPrompt;
     if (!prompt || !prompt.trim()) return json(res, 400, { error: 'prompt required' });
     running = true;

@@ -71,7 +71,9 @@ curl -s -H "authorization: Bearer $KEY" http://127.0.0.1:8790/v1/chat/completion
 
 ### Working directory
 
-The lane runs in the caller's project, never in the router's own folder. Resolution order: `cwd` in the body (or an `x-router-cwd` header), then the saved `cwd` setting, then the directory the server was started from. The router's folder is only a last resort.
+The lane runs in the caller's project, never in the router's own folder. The directory is read from the request itself: a harness states its workspace in the system prompt (`Current working directory: ...`, `Workspace: ...`, `<cwd>...</cwd>`) and that is used automatically — no dashboard step.
+
+Resolution order: `cwd` in the body, `x-router-cwd` header, the system prompt, the saved setting, the directory the server was started from. The router's folder is only a last resort.
 
 ```powershell
 .\start.cmd C:\my\project    # start with that project as the default
