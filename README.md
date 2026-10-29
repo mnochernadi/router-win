@@ -71,7 +71,13 @@ curl -s -H "authorization: Bearer $KEY" http://127.0.0.1:8790/v1/chat/completion
 
 ### Working directory
 
-The lane runs in the caller's project, not in its own scratch dir. Pass `cwd` in the body (or an `x-router-cwd` header); an invalid path falls back to `runtime/proj`. The dashboard has a working directory field, persisted in settings.
+The lane runs in the caller's project, never in the router's own folder. Resolution order: `cwd` in the body (or an `x-router-cwd` header), then the saved `cwd` setting, then the directory the server was started from. The router's folder is only a last resort.
+
+```powershell
+.\start.cmd C:\my\project    # start with that project as the default
+```
+
+The dashboard has a working directory field, persisted in settings.
 
 ### In a harness
 
