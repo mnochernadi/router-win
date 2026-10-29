@@ -1,4 +1,4 @@
-# router-win
+﻿# router-win
 
 Anonymous OpenCode lane for Windows with a dashboard. It runs the OpenCode CLI in an
 isolated profile with no credential, pushes its traffic through a rotating pool of
@@ -85,6 +85,18 @@ The server binds `127.0.0.1` only. To reach it from another machine, change the
 
 One run at a time: a second concurrent request gets `429 rate_limit_error`.
 
+### Error classes
+
+The lane separates three failures so it does not burn the pool on the wrong one:
+
+| Upstream says | Lane does | API returns |
+|---|---|---|
+| free-usage limit | parks the exit, rotates | retried internally |
+| model unavailable | does **not** park, does not rebuild the pool | `404 model_unavailable` |
+| anything else | parks the exit, rotates | `502` after the pool is exhausted |
+
+A model the upstream refused is remembered in-process, so the next call fails in one round trip instead of walking every exit.
+
 Dashboard actions, for scripting:
 
 ```
@@ -102,12 +114,12 @@ GET  /api/log                       rolling log tail
 
 | Layer | Mechanism |
 |---|---|
-| Profile | own `USERPROFILE` + `XDG_*` under `runtime/` — own `opencode.db`, own auth store |
+| Profile | own `USERPROFILE` + `XDG_*` under `runtime/` â€” own `opencode.db`, own auth store |
 | Service | `--standalone` on every call, so the desktop app's background service is never used |
 | Credential | every credential row is deleted before each run, so the lane cannot ride an account |
 | Egress | the bundled xray on `127.0.0.1:18080`, one outbound per attempt |
-| Child env | built from a whitelist, not inherited — the CLI hangs if it inherits `PORT`/`HOST` |
-| Child stdin | ignored — the CLI also hangs on an open pipe |
+| Child env | built from a whitelist, not inherited â€” the CLI hangs if it inherits `PORT`/`HOST` |
+| Child stdin | ignored â€” the CLI also hangs on an open pipe |
 
 The per-attempt xray config carries **only** the chosen outbound. No `direct`
 fallback, so a dead exit fails loudly instead of silently answering from the local IP.

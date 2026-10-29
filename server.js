@@ -19,6 +19,7 @@ const MIME = {
 const clients = new Set();
 let running = false;
 let lastRun = null;
+const badModels = new Set(); // models the upstream refused; no exit will fix them
 
 function broadcast(event) {
   const payload = `data: ${JSON.stringify(event)}\n\n`;
@@ -128,6 +129,9 @@ async function handle(req, res) {
     if (reqBody.model && ids.length && !wanted) {
       return json(res, 404, { error: { message: `unknown model: ${reqBody.model}`, type: 'invalid_request_error' } });
     }
+    if (wanted && badModels.has(wanted)) {
+      return json(res, 404, { error: { message: `model unavailable upstream: ${wanted}`, type: 'model_unavailable' } });
+    }
     const settings = wanted ? { ...s, model: `opencode/${wanted}` } : s;
 
     const id = `chatcmpl-${Date.now().toString(36)}`;
@@ -159,7 +163,12 @@ async function handle(req, res) {
           }
           else if (ev.type === 'log') log(ev.message);
         });
-        chunk({}, 'stop');
+        if (!r.ok && r.reason === 'model') {
+          badModels.add(r.model);
+          chunk({ content: `[model unavailable] ` + r.model }, 'stop');
+        } else {
+          chunk({}, 'stop');
+        }
         res.write('data: [DONE]\n\n');
         log(r.ok ? `api done via ${r.exit}` : `api failed: ${r.text}`);
       } catch (e) {
@@ -178,6 +187,10 @@ async function handle(req, res) {
       lastRun = { ok: r.ok, text: r.text, exit: r.exit, attempts: r.attempts, at: Date.now() };
       broadcast({ type: 'done', ...lastRun });
       if (!r.ok) {
+        if (r.reason === 'model') {
+          badModels.add(r.model);
+          return json(res, 404, { error: { message: r.text, type: 'model_unavailable' } });
+        }
         return json(res, 502, { error: { message: r.text, type: 'upstream_error', exit: r.exit } });
       }
       return json(res, 200, {
