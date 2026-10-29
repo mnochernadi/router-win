@@ -115,7 +115,18 @@ async function handle(req, res) {
   if ((p === '/v1/chat/completions' || p === '/chat/completions') && req.method === 'POST') {
     const reqBody = await body(req);
     const msgs = Array.isArray(reqBody.messages) ? reqBody.messages : [];
-    const prompt = msgs.filter((m) => m.role === 'user').map((m) => m.content).pop();
+    // content may be a plain string or an array of parts (OpenAI multimodal shape).
+    // Passing the array straight to spawn stringifies it to "[object Object]" and the
+    // model receives nothing.
+    const textOf = (m) => {
+      const c = m.content;
+      if (typeof c === 'string') return c;
+      if (Array.isArray(c)) {
+        return c.map((p) => (typeof p === 'string' ? p : p && (p.text || p.content) || '')).join('');
+      }
+      return c == null ? '' : String(c);
+    };
+    const prompt = msgs.filter((m) => m.role === 'user').map(textOf).filter((t) => t.trim()).pop();
     const cwd = reqBody.cwd || req.headers['x-router-cwd'] || undefined;
     if (!prompt) {
       return json(res, 400, { error: { message: 'messages with a user turn required', type: 'invalid_request_error' } });
@@ -243,7 +254,8 @@ async function handle(req, res) {
 
   if (p === '/api/run' && req.method === 'POST') {
     if (running) return json(res, 409, { error: 'already running' });
-    const { prompt, cwd } = await body(req);
+    const { prompt: rawPrompt, cwd } = await body(req);
+    const prompt = Array.isArray(rawPrompt) ? rawPrompt.map((p) => (typeof p === 'string' ? p : p && p.text || '')).join('') : rawPrompt;
     if (!prompt || !prompt.trim()) return json(res, 400, { error: 'prompt required' });
     running = true;
     broadcast({ type: 'state' });

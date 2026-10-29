@@ -95,6 +95,10 @@ The server binds `127.0.0.1` only. To reach it from another machine, change the
 
 One run at a time: a second concurrent request gets `429 rate_limit_error`.
 
+### Non-interactive
+
+The question tool is denied in the isolated profile (`runtime/config/opencode/opencode.json`, rewritten on start), so a run never stalls on a cancelled prompt — the model proceeds on its own assumptions. Message content is normalised, so both a plain string and the OpenAI multimodal array shape reach the model as text.
+
 ### Error classes
 
 The lane separates three failures so it does not burn the pool on the wrong one:
